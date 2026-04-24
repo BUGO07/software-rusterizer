@@ -1,6 +1,7 @@
 use std::num::NonZeroU32;
 use std::rc::Rc;
 
+use glam::Vec3;
 use softbuffer::{Context, Pixel, Surface};
 use winit::application::ApplicationHandler;
 use winit::event::{StartCause, WindowEvent};
@@ -103,14 +104,32 @@ impl ApplicationHandler for App {
             WindowEvent::RedrawRequested => {
                 // Get the next buffer.
                 let mut buffer = surface.next_buffer().unwrap();
+                let width = buffer.width().get() as f32;
+                let height = buffer.height().get() as f32;
 
                 // Render into the buffer.
                 for (x, y, pixel) in buffer.pixels_iter() {
-                    let red = (x % 255) as u8;
-                    let green = (y % 255) as u8;
-                    let blue = ((x * y) % 255) as u8;
+                    for vertex in TRIANGLE_VERTICES.chunks(3) {
+                        let u = x as f32 / width;
+                        let v = y as f32 / height;
 
-                    *pixel = Pixel::new_rgb(red, green, blue);
+                        fn same_side(p: Vec3, p2: Vec3, a: Vec3, b: Vec3) -> bool {
+                            let cp1 = (b - a).cross(p - a);
+                            let cp2 = (b - a).cross(p2 - a);
+                            cp1.dot(cp2) >= 0.0
+                        }
+
+                        fn point_in_triangle(p: Vec3, a: Vec3, b: Vec3, c: Vec3) -> bool {
+                            same_side(p, a, b, c) && same_side(p, b, a, c) && same_side(p, c, a, b)
+                        }
+
+                        let p = Vec3::new(u, 1.0 - v, 0.0) * 2.0 - 1.0;
+                        if point_in_triangle(p, vertex[0], vertex[1], vertex[2]) {
+                            *pixel = Pixel::new_rgb(255, 0, 0);
+                        } else {
+                            *pixel = Pixel::new_rgb(0, 0, 0);
+                        }
+                    }
                 }
 
                 // Send the buffer to the compositor.
@@ -123,3 +142,9 @@ impl ApplicationHandler for App {
         }
     }
 }
+
+const TRIANGLE_VERTICES: [Vec3; 3] = [
+    Vec3::new(0.0, 0.5, 0.0),
+    Vec3::new(-0.5, -0.5, 0.0),
+    Vec3::new(0.5, -0.5, 0.0),
+];
