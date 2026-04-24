@@ -1,0 +1,9 @@
+[package]
+name = "software-rusterizer"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+glam = "0.32.1"
+softbuffer = { git = "https://github.com/rust-windowing/softbuffer" }
+winit = "0.30.13"
