@@ -1,8 +1,9 @@
 use std::num::NonZeroU32;
 use std::rc::Rc;
 
-use glam::Vec3;
+use glam::{Vec3, Vec4};
 use softbuffer::{Context, Pixel, Surface};
+use whirlwind_obj::Vertex;
 use winit::application::ApplicationHandler;
 use winit::event::{StartCause, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, EventLoop, OwnedDisplayHandle};
@@ -32,6 +33,8 @@ enum AppState {
     },
     Running {
         surface: Surface<OwnedDisplayHandle, Rc<Window>>,
+        obj: whirlwind_obj::Obj,
+        vertices: Vec<Vertex>,
     },
 }
 
@@ -66,12 +69,22 @@ impl ApplicationHandler for App {
             surface.resize(width, height).unwrap();
         }
 
-        self.state = AppState::Running { surface };
+        let obj = whirlwind_obj::ObjParser::new("assets/Cube.obj".into())
+            .parse()
+            .unwrap();
+
+        let vertices = obj.mesh.vertices();
+
+        self.state = AppState::Running {
+            surface,
+            obj,
+            vertices,
+        };
     }
 
     fn suspended(&mut self, _event_loop: &ActiveEventLoop) {
         // Drop the surface.
-        let AppState::Running { surface } = &mut self.state else {
+        let AppState::Running { surface, .. } = &mut self.state else {
             unreachable!("got resumed event while not running");
         };
         let window = surface.window().clone();
@@ -84,7 +97,12 @@ impl ApplicationHandler for App {
         window_id: WindowId,
         event: WindowEvent,
     ) {
-        let AppState::Running { surface } = &mut self.state else {
+        let AppState::Running {
+            surface,
+            obj,
+            vertices,
+        } = &mut self.state
+        else {
             unreachable!("got window event while suspended");
         };
 
@@ -109,7 +127,7 @@ impl ApplicationHandler for App {
 
                 // Render into the buffer.
                 for (x, y, pixel) in buffer.pixels_iter() {
-                    for vertex in TRIANGLE_VERTICES.chunks(3) {
+                    for vertex in vertices.chunks(3) {
                         let u = x as f32 / width;
                         let v = y as f32 / height;
 
@@ -123,9 +141,28 @@ impl ApplicationHandler for App {
                             same_side(p, a, b, c) && same_side(p, b, a, c) && same_side(p, c, a, b)
                         }
 
+                        fn sample_texture(
+                            u: f32,
+                            v: f32,
+                            material: &whirlwind_obj::Material,
+                        ) -> Pixel {
+                            let color = material.diffuse_color;
+                            Pixel::new_rgb(
+                                (color[0] * 255.0) as u8,
+                                (color[1] * 255.0) as u8,
+                                (color[2] * 255.0) as u8,
+                            )
+                        }
+
                         let p = Vec3::new(u, 1.0 - v, 0.0) * 2.0 - 1.0;
-                        if point_in_triangle(p, vertex[0], vertex[1], vertex[2]) {
-                            *pixel = Pixel::new_rgb(255, 0, 0);
+                        if point_in_triangle(
+                            p,
+                            Vec4::from(vertex[0].position).truncate() / 5.0,
+                            Vec4::from(vertex[1].position).truncate() / 5.0,
+                            Vec4::from(vertex[2].position).truncate() / 5.0,
+                        ) {
+                            *pixel = sample_texture(u, v, &obj.materials[0]);
+                            break;
                         } else {
                             *pixel = Pixel::new_rgb(0, 0, 0);
                         }

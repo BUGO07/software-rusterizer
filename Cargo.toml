@@ -7,4 +7,5 @@ edition = "2024"
 glam = "0.32.1"
 rand = "0.10.1"
 softbuffer = { git = "https://github.com/rust-windowing/softbuffer" }
+whirlwind_obj = { git = "https://github.com/BUGO07/whirlwind_obj" }
 winit = "0.30.13"
